@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const fetch = require('node-fetch');
 const path = require('path');
 const fs = require('fs');
+const sharp = require('sharp');
 const Participant = require('../models/participant.model');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'access-pass-secret';
@@ -52,22 +53,29 @@ module.exports = {
 
   // 📄 GET PASS DATA
   async getRecord(req, res) {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ error: 'email required' });
+    try {
+      const { email } = req.query;
+      if (!email) return res.status(400).json({ error: 'email required' });
 
-    const user = await Participant.findByEmail(email);
-    if (!user) return res.status(404).json({ error: 'not found' });
+      const user = await Participant.findByEmail(email);
+      if (!user) return res.status(404).json({ error: 'not found' });
 
-    res.json({
-      miNo: user.mi_no,
-      name: user.name,
-      email: user.email,
-      college: user.college,
-      imageUploaded: user.image_uploaded === 1
-    });
+      res.json({
+        miNo: user.mi_no,
+        name: user.name,
+        email: user.email,
+        college: user.college,
+        imageUploaded: user.image_uploaded === 1,
+        passImagePath: user.pass_image_path || null
+      });
+
+    } catch (err) {
+      console.error('getRecord error:', err);
+      res.status(500).json({ error: 'server error' });
+    }
   },
 
-  // 🖼️ IMAGE UPLOAD (FIXED)
+  // 🖼️ IMAGE UPLOAD (PHOTO)
   async uploadImage(req, res) {
     try {
       if (!req.headers.authorization) {
@@ -98,21 +106,66 @@ module.exports = {
     }
   },
 
-  // 🖼️ IMAGE FETCH
+  // 🖼️ IMAGE FETCH (PHOTO)
   async getImage(req, res) {
-    const { email } = req.query;
-    if (!email) return res.status(400).json({ error: 'email required' });
+    try {
+      const { email } = req.query;
+      if (!email) return res.status(400).json({ error: 'email required' });
 
-    const user = await Participant.findByEmail(email);
-    if (!user || !user.image_path) {
-      return res.status(404).json({ error: 'no image' });
+      const user = await Participant.findByEmail(email);
+      if (!user || !user.image_path) {
+        return res.status(404).json({ error: 'no image' });
+      }
+
+      const filePath = path.join(__dirname, '..', UPLOAD_DIR, user.image_path);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'file missing' });
+      }
+
+      res.sendFile(filePath);
+
+    } catch (err) {
+      console.error('getImage error:', err);
+      res.status(500).json({ error: 'server error' });
     }
+  },
 
-    const filePath = path.join(__dirname, '..', UPLOAD_DIR, user.image_path);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'file missing' });
+  // 🧾 SAVE GENERATED PASS (NEW)
+  async savePass(req, res) {
+    try {
+      if (!req.headers.authorization) {
+        return res.status(401).json({ error: 'auth required' });
+      }
+
+      const token = req.headers.authorization.split(' ')[1];
+      const decoded = jwt.verify(token, JWT_SECRET);
+
+      if (!req.file) {
+        return res.status(400).json({ error: 'pass image required' });
+      }
+
+      const user = await Participant.findByEmail(decoded.email);
+      if (!user) return res.status(404).json({ error: 'user not found' });
+
+      const filename = `pass_${user.mi_no}_${Date.now()}.png`;
+      const outputPath = path.join(__dirname, '..', 'passes', filename);
+
+      await sharp(req.file.buffer)
+        .resize({ width: 1200 })
+        .png({ quality: 80 })
+        .toFile(outputPath);
+
+      await Participant.updatePassImageByEmail(decoded.email, filename);
+
+      res.json({
+        ok: true,
+        url: `/passes/${filename}`
+      });
+
+    } catch (err) {
+      console.error('savePass error:', err);
+      res.status(500).json({ error: 'server error' });
     }
-
-    res.sendFile(filePath);
   }
+
 };

@@ -36,10 +36,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 /* =======================
-   STATIC FILES (IMAGES)
+   STATIC FILES
 ======================= */
+
+// 🔹 Existing: participant uploaded photos
 const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
 app.use('/uploads', express.static(path.join(__dirname, UPLOAD_DIR)));
+
+// 🔹 NEW: generated entry / accommodation passes
+app.use('/passes', express.static(path.join(__dirname, 'passes')));
 
 /* =======================
    ROUTES

@@ -28,6 +28,16 @@ const Participant = {
        WHERE LOWER(email) = LOWER(?)`,
       [filename, email]
     );
+  },
+
+  // 🧾 NEW: Save generated pass image path
+  async updatePassImageByEmail(email, filename) {
+    await db.query(
+      `UPDATE passes
+       SET pass_image_path = ?
+       WHERE LOWER(email) = LOWER(?)`,
+      [filename, email]
+    );
   }
 
 };
