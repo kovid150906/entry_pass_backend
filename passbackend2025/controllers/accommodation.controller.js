@@ -10,7 +10,7 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
 
 module.exports = {
 
-  // 🔐 LOGIN + EDITH CHECK
+  // 🔐 LOGIN + CHECK
   async checkAccommodation(req, res) {
     try {
       const { email } = req.body;
@@ -51,7 +51,7 @@ module.exports = {
     }
   },
 
-  // 📄 GET PASS DATA
+  // 📄 GET RECORD
   async getRecord(req, res) {
     try {
       const { email } = req.query;
@@ -67,8 +67,7 @@ module.exports = {
         college: user.college,
         imageUploaded: user.image_uploaded === 1,
         passImagePath: user.pass_image_path || null,
-        
-        // 🔥 NEW: Send FULL ID Number
+        // Send Full ID details
         govtIdType: user.govt_id_type || 'ID',
         govtIdNumber: user.govt_id_number || ''
       });
@@ -79,7 +78,7 @@ module.exports = {
     }
   },
 
-  // 🖼️ IMAGE UPLOAD
+  // 🖼️ UPLOAD IMAGE (PHOTO + ID)
   async uploadImage(req, res) {
     try {
       if (!req.headers.authorization) return res.status(401).json({ error: 'auth required' });
@@ -90,8 +89,8 @@ module.exports = {
 
       const { idType, idNumber } = req.body;
       
-      // 🔥 UPDATED VALIDATION: Ensure it's not empty and reasonable length
-      if (!idType || !idNumber || idNumber.length < 5) {
+      // Validation: Ensure ID number is provided (Full Number)
+      if (!idType || !idNumber || idNumber.trim().length < 5) {
           if (req.file) fs.unlinkSync(req.file.path);
           return res.status(400).json({ error: 'Please provide valid full ID number' });
       }
@@ -129,37 +128,62 @@ module.exports = {
     }
   },
 
-  // 🧾 SAVE PASS
+  // 🧾 SAVE GENERATED PASS (DEBUG VERSION)
   async savePass(req, res) {
+    console.log("---- STARTING SAVE PASS ----");
     try {
-      if (!req.headers.authorization) return res.status(401).json({ error: 'auth required' });
+      // 1. Check Auth
+      if (!req.headers.authorization) {
+        console.log("❌ No Auth Header");
+        return res.status(401).json({ error: 'auth required' });
+      }
+
       const token = req.headers.authorization.split(' ')[1];
       const decoded = jwt.verify(token, JWT_SECRET);
+      console.log(`✅ User Authenticated: ${decoded.email}`);
 
-      if (!req.file) return res.status(400).json({ error: 'pass image required' });
+      // 2. Check File
+      if (!req.file) {
+        console.log("❌ No file. Multer rejected it (Size limit?) or FormData error.");
+        return res.status(400).json({ error: 'pass image required or file too large' });
+      }
+      console.log(`✅ File received. Size: ${(req.file.size / 1024 / 1024).toFixed(2)} MB`);
 
+      // 3. Find User
       const user = await Participant.findByEmail(decoded.email);
-      if (!user) return res.status(404).json({ error: 'user not found' });
+      if (!user) {
+        console.log("❌ User not found");
+        return res.status(404).json({ error: 'user not found' });
+      }
 
-      // Ensure directory exists
+      // 4. Check/Create Folder
       const passesDir = path.join(__dirname, '..', 'passes');
-      if (!fs.existsSync(passesDir)) fs.mkdirSync(passesDir, { recursive: true });
+      if (!fs.existsSync(passesDir)) {
+          console.log("⚠️ Passes folder missing. Creating it...");
+          fs.mkdirSync(passesDir, { recursive: true });
+      }
 
+      // 5. Save File
       const filename = `pass_${user.mi_no}_${Date.now()}.png`;
       const outputPath = path.join(passesDir, filename);
-
+      
+      console.log("⚙️ Processing image with Sharp...");
       await sharp(req.file.buffer)
         .resize({ width: 1200 })
         .png({ quality: 80 })
         .toFile(outputPath);
+      console.log(`✅ Image saved to: ${filename}`);
 
+      // 6. Update Database
       await Participant.updatePassImageByEmail(decoded.email, filename);
+      console.log("✅ Database Updated");
 
       res.json({ ok: true, url: `/passes/${filename}` });
+      console.log("---- FINISHED SAVE PASS ----");
 
     } catch (err) {
-      console.error('savePass error:', err);
-      res.status(500).json({ error: 'server error' });
+      console.error('❌ CRITICAL SAVE PASS ERROR:', err);
+      res.status(500).json({ error: 'server error', details: err.message });
     }
   }
 

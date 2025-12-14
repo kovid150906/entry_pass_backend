@@ -21,7 +21,7 @@ const Participant = {
     `, [email, miNo, name, college]);
   },
 
-  // 🔥 UPDATED: Now saves the FULL ID Number
+  // 🔥 UPDATED: Saves FULL ID Number
   async updateImageByEmail(email, filename, idType, idNumber) {
     await db.query(
       `UPDATE passes

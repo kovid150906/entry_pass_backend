@@ -26,7 +26,7 @@ app.use((req, res, next) => {
 ======================= */
 app.use(
   cors({
-    origin: true, // Allow all origins for simplicity (fixes dev port issues)
+    origin: true, // Allow all origins for dev simplicity
     credentials: true
   })
 );
@@ -38,8 +38,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 /* =======================
-   2. STATIC FILE CORS FIX
-   (Essential for html2canvas)
+   2. STATIC FILE CORS FIX (CRITICAL)
+   This allows html2canvas to read images without security errors
 ======================= */
 const allowCrossDomain = (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -56,14 +56,14 @@ const allowCrossDomain = (req, res, next) => {
 const uploadDir = path.join(__dirname, process.env.UPLOAD_DIR || 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-// 🔥 Notice 'allowCrossDomain' is added here
+// 🔥 Apply allowCrossDomain here
 app.use('/uploads', allowCrossDomain, express.static(uploadDir));
 
 // 2. Ensure 'passes' folder exists & Apply CORS
 const passesDir = path.join(__dirname, 'passes');
 if (!fs.existsSync(passesDir)) fs.mkdirSync(passesDir, { recursive: true });
 
-// 🔥 Notice 'allowCrossDomain' is added here
+// 🔥 Apply allowCrossDomain here
 app.use('/passes', allowCrossDomain, express.static(passesDir));
 
 /* =======================

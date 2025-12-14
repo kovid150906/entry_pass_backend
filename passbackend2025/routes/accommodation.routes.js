@@ -7,7 +7,7 @@ const controller = require('../controllers/accommodation.controller');
 const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
 
 /**
- * Multer storage for USER PHOTO upload (existing)
+ * 1. Multer storage for USER PHOTO upload (Disk Storage)
  */
 const storage = multer.diskStorage({
   destination: (req, file, cb) =>
@@ -23,44 +23,32 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 1 * 1024 * 1024 }
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB for user photos
 });
 
 /**
- * Multer memory storage for GENERATED PASS upload (NEW)
- * We keep this separate so it does NOT interfere with photo uploads
+ * 2. Multer memory storage for GENERATED PASS upload (Memory Storage)
+ * 🔥 LIMIT INCREASED TO 10MB to fix "File too large" errors
  */
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 3 * 1024 * 1024 } // pass image can be larger
+  limits: { fileSize: 10 * 1024 * 1024 } 
 });
 
 /* ===========================
-   AUTH / ACCOMMODATION
+   ROUTES
 =========================== */
 
-// 🔐 Access pass check
+// Auth & Check
 router.post('/check', controller.checkAccommodation);
 router.get('/check', controller.checkAccommodation);
-
-// 📄 Pass data
 router.get('/get', controller.getRecord);
 
-/* ===========================
-   IMAGE (PHOTO)
-=========================== */
-
-// 🖼️ Upload participant photo
+// User Photo Upload
 router.post('/upload-image', upload.single('photo'), controller.uploadImage);
-
-// 🖼️ Get participant photo
 router.get('/get-image', controller.getImage);
 
-/* ===========================
-   PASS (GENERATED)
-=========================== */
-
-// 🧾 Save generated pass image (NEW)
+// 🔥 Save Generated Pass
 router.post(
   '/save-pass',
   memoryUpload.single('pass'),
