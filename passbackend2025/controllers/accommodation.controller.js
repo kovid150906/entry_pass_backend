@@ -68,9 +68,9 @@ module.exports = {
         imageUploaded: user.image_uploaded === 1,
         passImagePath: user.pass_image_path || null,
         
-        // 🔥 NEW: Send ID Details to Frontend
+        // 🔥 NEW: Send FULL ID Number
         govtIdType: user.govt_id_type || 'ID',
-        govtIdLast4: user.govt_id_last_4 || 'XXXX'
+        govtIdNumber: user.govt_id_number || ''
       });
 
     } catch (err) {
@@ -79,61 +79,47 @@ module.exports = {
     }
   },
 
-  // 🖼️ IMAGE UPLOAD (PHOTO + GOVT ID)
+  // 🖼️ IMAGE UPLOAD
   async uploadImage(req, res) {
     try {
-      if (!req.headers.authorization) {
-        return res.status(401).json({ error: 'auth required' });
-      }
-
+      if (!req.headers.authorization) return res.status(401).json({ error: 'auth required' });
       const token = req.headers.authorization.split(' ')[1];
       const decoded = jwt.verify(token, JWT_SECRET);
 
-      if (!req.file) {
-        return res.status(400).json({ error: 'photo required' });
-      }
+      if (!req.file) return res.status(400).json({ error: 'photo required' });
 
-      // 🔥 NEW: Extract Govt ID Data from Body
       const { idType, idNumber } = req.body;
-
-      // Validate
-      if (!idType || !idNumber || idNumber.length < 4) {
-          // If validation fails, delete the uploaded file immediately
+      
+      // 🔥 UPDATED VALIDATION: Ensure it's not empty and reasonable length
+      if (!idType || !idNumber || idNumber.length < 5) {
           if (req.file) fs.unlinkSync(req.file.path);
-          return res.status(400).json({ error: 'Valid Govt ID details required' });
+          return res.status(400).json({ error: 'Please provide valid full ID number' });
       }
 
       const user = await Participant.findByEmail(decoded.email);
       if (!user) return res.status(404).json({ error: 'user not found' });
 
-      // Save everything to DB
       await Participant.updateImageByEmail(decoded.email, req.file.filename, idType, idNumber);
-
       res.json({ ok: true });
 
     } catch (err) {
       console.error('uploadImage error:', err);
-      // Clean up on error
       if (req.file) fs.unlinkSync(req.file.path);
       res.status(500).json({ error: 'server error' });
     }
   },
 
-  // 🖼️ IMAGE FETCH (PHOTO)
+  // 🖼️ GET IMAGE
   async getImage(req, res) {
     try {
       const { email } = req.query;
       if (!email) return res.status(400).json({ error: 'email required' });
 
       const user = await Participant.findByEmail(email);
-      if (!user || !user.image_path) {
-        return res.status(404).json({ error: 'no image' });
-      }
+      if (!user || !user.image_path) return res.status(404).json({ error: 'no image' });
 
       const filePath = path.join(__dirname, '..', UPLOAD_DIR, user.image_path);
-      if (!fs.existsSync(filePath)) {
-        return res.status(404).json({ error: 'file missing' });
-      }
+      if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'file missing' });
 
       res.sendFile(filePath);
 
@@ -143,25 +129,24 @@ module.exports = {
     }
   },
 
-  // 🧾 SAVE GENERATED PASS
+  // 🧾 SAVE PASS
   async savePass(req, res) {
     try {
-      if (!req.headers.authorization) {
-        return res.status(401).json({ error: 'auth required' });
-      }
-
+      if (!req.headers.authorization) return res.status(401).json({ error: 'auth required' });
       const token = req.headers.authorization.split(' ')[1];
       const decoded = jwt.verify(token, JWT_SECRET);
 
-      if (!req.file) {
-        return res.status(400).json({ error: 'pass image required' });
-      }
+      if (!req.file) return res.status(400).json({ error: 'pass image required' });
 
       const user = await Participant.findByEmail(decoded.email);
       if (!user) return res.status(404).json({ error: 'user not found' });
 
+      // Ensure directory exists
+      const passesDir = path.join(__dirname, '..', 'passes');
+      if (!fs.existsSync(passesDir)) fs.mkdirSync(passesDir, { recursive: true });
+
       const filename = `pass_${user.mi_no}_${Date.now()}.png`;
-      const outputPath = path.join(__dirname, '..', 'passes', filename);
+      const outputPath = path.join(passesDir, filename);
 
       await sharp(req.file.buffer)
         .resize({ width: 1200 })
@@ -170,10 +155,7 @@ module.exports = {
 
       await Participant.updatePassImageByEmail(decoded.email, filename);
 
-      res.json({
-        ok: true,
-        url: `/passes/${filename}`
-      });
+      res.json({ ok: true, url: `/passes/${filename}` });
 
     } catch (err) {
       console.error('savePass error:', err);

@@ -2,8 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
-const initDatabase = require('./config/initDatabase');
+// 🔥 Import DB to trigger connection test immediately
+const db = require('./config/db');
 const accommodationRoutes = require('./routes/accommodation.routes');
 
 const app = express();
@@ -20,11 +22,11 @@ app.use((req, res, next) => {
 });
 
 /* =======================
-   CORS CONFIG
+   1. GLOBAL CORS CONFIG
 ======================= */
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN || 'http://localhost:2025',
+    origin: true, // Allow all origins for simplicity (fixes dev port issues)
     credentials: true
   })
 );
@@ -36,36 +38,48 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 /* =======================
+   2. STATIC FILE CORS FIX
+   (Essential for html2canvas)
+======================= */
+const allowCrossDomain = (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+};
+
+/* =======================
    STATIC FILES
 ======================= */
 
-// 🔹 Existing: participant uploaded photos
-const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads';
-app.use('/uploads', express.static(path.join(__dirname, UPLOAD_DIR)));
+// 1. Ensure 'uploads' folder exists & Apply CORS
+const uploadDir = path.join(__dirname, process.env.UPLOAD_DIR || 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-// 🔹 NEW: generated entry / accommodation passes
-app.use('/passes', express.static(path.join(__dirname, 'passes')));
+// 🔥 Notice 'allowCrossDomain' is added here
+app.use('/uploads', allowCrossDomain, express.static(uploadDir));
+
+// 2. Ensure 'passes' folder exists & Apply CORS
+const passesDir = path.join(__dirname, 'passes');
+if (!fs.existsSync(passesDir)) fs.mkdirSync(passesDir, { recursive: true });
+
+// 🔥 Notice 'allowCrossDomain' is added here
+app.use('/passes', allowCrossDomain, express.static(passesDir));
 
 /* =======================
    ROUTES
 ======================= */
 app.use('/api/accommodation', accommodationRoutes);
 
-app.get('/health', (req, res) => {
-  res.json({ ok: true, status: 'Access Pass backend running' });
+app.get('/', (req, res) => {
+  res.send('✅ Mood Indigo Accommodation Backend is Running');
 });
 
 /* =======================
    START SERVER
 ======================= */
-(async () => {
-  try {
-    await initDatabase();
-    app.listen(PORT, () => {
-      console.log(`🚀 Backend running on port ${PORT}`);
-    });
-  } catch (err) {
-    console.error('❌ Server failed to start:', err);
-    process.exit(1);
-  }
-})();
+app.listen(PORT, () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log(`📂 Uploads URL: http://localhost:${PORT}/uploads`);
+  console.log(`📂 Passes URL:  http://localhost:${PORT}/passes`);
+});

@@ -21,16 +21,16 @@ const Participant = {
     `, [email, miNo, name, college]);
   },
 
-  // 🔥 UPDATED: Now saves ID Type and Last 4 Digits
-  async updateImageByEmail(email, filename, idType, last4) {
+  // 🔥 UPDATED: Now saves the FULL ID Number
+  async updateImageByEmail(email, filename, idType, idNumber) {
     await db.query(
       `UPDATE passes
        SET image_path = ?, 
            image_uploaded = 1,
            govt_id_type = ?,
-           govt_id_last_4 = ?
+           govt_id_number = ?
        WHERE LOWER(email) = LOWER(?)`,
-      [filename, idType, last4, email]
+      [filename, idType, idNumber, email]
     );
   },
 
