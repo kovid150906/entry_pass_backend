@@ -66,7 +66,11 @@ module.exports = {
         email: user.email,
         college: user.college,
         imageUploaded: user.image_uploaded === 1,
-        passImagePath: user.pass_image_path || null
+        passImagePath: user.pass_image_path || null,
+        
+        // 🔥 NEW: Send ID Details to Frontend
+        govtIdType: user.govt_id_type || 'ID',
+        govtIdLast4: user.govt_id_last_4 || 'XXXX'
       });
 
     } catch (err) {
@@ -75,7 +79,7 @@ module.exports = {
     }
   },
 
-  // 🖼️ IMAGE UPLOAD (PHOTO)
+  // 🖼️ IMAGE UPLOAD (PHOTO + GOVT ID)
   async uploadImage(req, res) {
     try {
       if (!req.headers.authorization) {
@@ -89,19 +93,28 @@ module.exports = {
         return res.status(400).json({ error: 'photo required' });
       }
 
+      // 🔥 NEW: Extract Govt ID Data from Body
+      const { idType, idNumber } = req.body;
+
+      // Validate
+      if (!idType || !idNumber || idNumber.length < 4) {
+          // If validation fails, delete the uploaded file immediately
+          if (req.file) fs.unlinkSync(req.file.path);
+          return res.status(400).json({ error: 'Valid Govt ID details required' });
+      }
+
       const user = await Participant.findByEmail(decoded.email);
       if (!user) return res.status(404).json({ error: 'user not found' });
 
-      if (user.image_uploaded === 1) {
-        return res.status(400).json({ error: 'image already uploaded' });
-      }
-
-      await Participant.updateImageByEmail(decoded.email, req.file.filename);
+      // Save everything to DB
+      await Participant.updateImageByEmail(decoded.email, req.file.filename, idType, idNumber);
 
       res.json({ ok: true });
 
     } catch (err) {
       console.error('uploadImage error:', err);
+      // Clean up on error
+      if (req.file) fs.unlinkSync(req.file.path);
       res.status(500).json({ error: 'server error' });
     }
   },
@@ -130,7 +143,7 @@ module.exports = {
     }
   },
 
-  // 🧾 SAVE GENERATED PASS (NEW)
+  // 🧾 SAVE GENERATED PASS
   async savePass(req, res) {
     try {
       if (!req.headers.authorization) {
